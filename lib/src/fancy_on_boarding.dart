@@ -1,12 +1,12 @@
 library fancy_on_boarding;
 
 import 'dart:async';
-import 'dart:developer';
+import 'dart:ui' as ui;
+import 'package:fancy_on_boarding/src/fancy_page.dart';
 import 'package:fancy_on_boarding/src/page_dragger.dart';
-import 'package:fancy_on_boarding/src/page_reveal.dart';
 import 'package:fancy_on_boarding/src/page_model.dart';
+import 'package:fancy_on_boarding/src/page_reveal.dart';
 import 'package:fancy_on_boarding/src/pager_indicator.dart';
-import 'package:fancy_on_boarding/src/pages.dart';
 import 'package:flutter/material.dart';
 
 class FancyOnBoarding extends StatefulWidget {
@@ -14,7 +14,12 @@ class FancyOnBoarding extends StatefulWidget {
   final VoidCallback onDoneButtonPressed;
   final VoidCallback onSkipButtonPressed;
   final String doneButtonText;
+  final ShapeBorder doneButtonShape;
+  final TextStyle doneButtonTextStyle;
+  final Color doneButtonBackgroundColor;
   final String skipButtonText;
+  final TextStyle skipButtonTextStyle;
+  final Color skipButtonColor;
   final bool showSkipButton;
   final bool allowSwipe;
 
@@ -23,7 +28,12 @@ class FancyOnBoarding extends StatefulWidget {
     @required this.onDoneButtonPressed,
     this.onSkipButtonPressed,
     this.doneButtonText = "Done",
+    this.doneButtonShape,
+    this.doneButtonTextStyle,
+    this.doneButtonBackgroundColor,
     this.skipButtonText = "Skip",
+    this.skipButtonTextStyle,
+    this.skipButtonColor,
     this.showSkipButton = true,
     this.allowSwipe = true,
   }) : assert(pageList.length != 0 && onDoneButtonPressed != null);
@@ -41,6 +51,8 @@ class _FancyOnBoardingState extends State<FancyOnBoarding>
   int nextPageIndex = 0;
   SlideDirection slideDirection = SlideDirection.none;
   double slidePercent = 0.0;
+
+  bool get isRTL => ui.window.locale.languageCode.toLowerCase() == "ar";
 
   @override
   void initState() {
@@ -82,23 +94,27 @@ class _FancyOnBoardingState extends State<FancyOnBoarding>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        PageL(
+        FancyPage(
           model: pageList[activeIndex],
           percentVisible: 1.0,
         ),
         PageReveal(
           revealPercent: slidePercent,
-          child: PageL(
+          child: FancyPage(
             model: pageList[nextPageIndex],
             percentVisible: slidePercent,
           ),
         ),
-        PagerIndicator(
-          viewModel: PagerIndicatorViewModel(
-            pageList,
-            activeIndex,
-            slideDirection,
-            slidePercent,
+        Positioned(
+          bottom: 8.0,
+          child: PagerIndicator(
+            isRtl: isRTL,
+            viewModel: PagerIndicatorViewModel(
+              pageList,
+              activeIndex,
+              slideDirection,
+              slidePercent,
+            ),
           ),
         ),
         PageDragger(
@@ -110,38 +126,46 @@ class _FancyOnBoardingState extends State<FancyOnBoarding>
         ),
         Positioned(  // Done Button
           bottom: 8,
-          right: 8,
+          right: isRTL ? null : 8,
+          left: isRTL ? 8 : null,
           child: Opacity(
             opacity: _getOpacity(),
             child: FlatButton(
-              shape: new RoundedRectangleBorder(
-                  borderRadius: new BorderRadius.circular(30.0)),
-              color: const Color(0x88FFFFFF),
+              shape: widget.doneButtonShape ??
+                  RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30.0)),
+              color:
+                  widget.doneButtonBackgroundColor ?? const Color(0x88FFFFFF),
               child: Text(
                 widget.doneButtonText,
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22.0,
-                    fontWeight: FontWeight.w800),
+                style: widget.doneButtonTextStyle ??
+                    const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22.0,
+                        fontWeight: FontWeight.w800),
               ),
               onPressed:
                   _getOpacity() == 1 ? widget.onDoneButtonPressed : () {},
             ),
           ),
         ),
-        widget.showSkipButton // Skip Button
-          ? Positioned(
-              top: MediaQuery.of(context).padding.top,
-              right: 0,
-              child: FlatButton(
-                child: Text(
-                  widget.skipButtonText,
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18.0,
-                      fontWeight: FontWeight.w800),
-                ),
-                onPressed: widget.onSkipButtonPressed,
+        widget.showSkipButton
+            ? Positioned(
+                top: MediaQuery.of(context).padding.top,
+                right: isRTL ? null : 0,
+                left: isRTL ? 0 : null,
+                child: FlatButton(
+                  color: widget.skipButtonColor,
+                  child: Text(
+                    widget.skipButtonText,
+                    style: widget.skipButtonTextStyle ??
+                        const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18.0,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  onPressed: widget.onSkipButtonPressed,
               ),
             )
           : Offstage(),
@@ -157,7 +181,6 @@ class _FancyOnBoardingState extends State<FancyOnBoarding>
                   if (pageList[activeIndex].preNext != null)
                     pageList[activeIndex].preNext();
                   nextPage();
-                  log("Click on Next");
                 },
               ),
             )
@@ -184,7 +207,6 @@ class _FancyOnBoardingState extends State<FancyOnBoarding>
     slideUpdateStream.stream.listen((SlideUpdate event) {
       setState(() {
         if (event.updateType == UpdateType.dragging && widget.allowSwipe) {
-          print('Sliding ${event.direction} at ${event.slidePercent}');
           slideDirection = event.direction;
           slidePercent = event.slidePercent;
 
@@ -196,7 +218,6 @@ class _FancyOnBoardingState extends State<FancyOnBoarding>
             nextPageIndex = activeIndex;
           }
         } else if (event.updateType == UpdateType.doneDragging) {
-          print('Done dragging.');
           if (slidePercent > 0.5) {
             animatedPageDragger = AnimatedPageDragger(
               slideDirection: slideDirection,
@@ -218,11 +239,9 @@ class _FancyOnBoardingState extends State<FancyOnBoarding>
 
           animatedPageDragger.run();
         } else if (event.updateType == UpdateType.animating) {
-          print('Sliding ${event.direction} at ${event.slidePercent}');
           slideDirection = event.direction;
           slidePercent = event.slidePercent;
         } else if (event.updateType == UpdateType.doneAnimating) {
-          print('Done animating. Next page index: $nextPageIndex');
           activeIndex = nextPageIndex;
 
           slideDirection = SlideDirection.none;
