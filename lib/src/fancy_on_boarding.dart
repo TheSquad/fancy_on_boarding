@@ -1,6 +1,7 @@
 library fancy_on_boarding;
 
 import 'dart:async';
+import 'dart:developer';
 import 'package:fancy_on_boarding/src/page_dragger.dart';
 import 'package:fancy_on_boarding/src/page_reveal.dart';
 import 'package:fancy_on_boarding/src/page_model.dart';
@@ -15,6 +16,7 @@ class FancyOnBoarding extends StatefulWidget {
   final String doneButtonText;
   final String skipButtonText;
   final bool showSkipButton;
+  final bool allowSwipe;
 
   FancyOnBoarding({
     @required this.pageList,
@@ -23,6 +25,7 @@ class FancyOnBoarding extends StatefulWidget {
     this.doneButtonText = "Done",
     this.skipButtonText = "Skip",
     this.showSkipButton = true,
+    this.allowSwipe = true,
   }) : assert(pageList.length != 0 && onDoneButtonPressed != null);
 
   @override
@@ -47,17 +50,45 @@ class _FancyOnBoardingState extends State<FancyOnBoarding>
     _listenSlideUpdate();
   }
 
+  nextPage() {
+    this.setState(() {
+      nextPageIndex = activeIndex + 1;
+      animatedPageDragger = AnimatedPageDragger(
+        slideDirection: SlideDirection.rightToLeft,
+        transitionGoal: TransitionGoal.open,
+        slidePercent: slidePercent,
+        slideUpdateStream: slideUpdateStream,
+        vsync: this,
+      );
+      animatedPageDragger.run();
+    });
+  }
+
+  previousPage() {
+    this.setState(() {
+      nextPageIndex = activeIndex - 1;
+      animatedPageDragger = AnimatedPageDragger(
+        slideDirection: SlideDirection.rightToLeft,
+        transitionGoal: TransitionGoal.open,
+        slidePercent: slidePercent,
+        slideUpdateStream: slideUpdateStream,
+        vsync: this,
+      );
+      animatedPageDragger.run();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Page(
+        PageL(
           model: pageList[activeIndex],
           percentVisible: 1.0,
         ),
         PageReveal(
           revealPercent: slidePercent,
-          child: Page(
+          child: PageL(
             model: pageList[nextPageIndex],
             percentVisible: slidePercent,
           ),
@@ -77,7 +108,7 @@ class _FancyOnBoardingState extends State<FancyOnBoarding>
           canDragRightToLeft: activeIndex < pageList.length - 1,
           slideUpdateStream: this.slideUpdateStream,
         ),
-        Positioned(
+        Positioned(  // Done Button
           bottom: 8,
           right: 8,
           child: Opacity(
@@ -94,26 +125,57 @@ class _FancyOnBoardingState extends State<FancyOnBoarding>
                     fontWeight: FontWeight.w800),
               ),
               onPressed:
-                  _getOpacity() == 1.0 ? widget.onDoneButtonPressed : () {},
+                  _getOpacity() == 1 ? widget.onDoneButtonPressed : () {},
             ),
           ),
         ),
-        widget.showSkipButton
-            ? Positioned(
-                top: MediaQuery.of(context).padding.top,
-                right: 0,
-                child: FlatButton(
-                  child: Text(
-                    widget.skipButtonText,
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18.0,
-                        fontWeight: FontWeight.w800),
-                  ),
-                  onPressed: widget.onSkipButtonPressed,
+        widget.showSkipButton // Skip Button
+          ? Positioned(
+              top: MediaQuery.of(context).padding.top,
+              right: 0,
+              child: FlatButton(
+                child: Text(
+                  widget.skipButtonText,
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18.0,
+                      fontWeight: FontWeight.w800),
                 ),
-              )
-            : Offstage()
+                onPressed: widget.onSkipButtonPressed,
+              ),
+            )
+          : Offstage(),
+        !widget.allowSwipe && this.activeIndex < widget.pageList.length - 1
+          ? Positioned(
+            height: 100,
+            bottom: 100,
+            right: 0,
+            width: 100,
+            child: FlatButton(
+              child: Icon(Icons.arrow_forward_ios, color: Colors.white, size: 60,),
+                onPressed: () {
+                  if (pageList[activeIndex].preNext != null)
+                    pageList[activeIndex].preNext();
+                  nextPage();
+                  log("Click on Next");
+                },
+              ),
+            )
+          : Offstage(),
+        !widget.allowSwipe && this.activeIndex > 0
+          ? Positioned(
+            height: 100,
+            bottom: 100,
+            left: 0,
+            width: 100,
+            child: FlatButton(
+              child: Icon(Icons.arrow_back_ios, color: Colors.white, size: 60,),
+                onPressed: () {
+                  previousPage();
+                },
+              ),
+            )
+          : Offstage()
       ],
     );
   }
@@ -121,7 +183,7 @@ class _FancyOnBoardingState extends State<FancyOnBoarding>
   _listenSlideUpdate() {
     slideUpdateStream.stream.listen((SlideUpdate event) {
       setState(() {
-        if (event.updateType == UpdateType.dragging) {
+        if (event.updateType == UpdateType.dragging && widget.allowSwipe) {
           print('Sliding ${event.direction} at ${event.slidePercent}');
           slideDirection = event.direction;
           slidePercent = event.slidePercent;
